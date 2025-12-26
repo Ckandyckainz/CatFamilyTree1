@@ -1,0 +1,900 @@
+// 5 generations
+
+let mcan = document.getElementById("mcan");
+mcan.width = 4000;
+mcan.height = 1000;
+let mctx = mcan.getContext("2d");
+let prepcan = document.getElementById("prepcan");
+prepcan.width = mcan.width;
+prepcan.height = mcan.height;
+let prepctx = prepcan.getContext("2d");
+
+let inGenerationIDCounters = [];
+let catIdCounter = 0;
+let catPoss = [];
+const near0 = 0.0000001;
+
+function newNormalCatColor() {
+    let r = Math.random();
+    let g = Math.random() * r;
+    let b = Math.random() * g;
+    if (Math.random() < 0.1) {
+        r = Math.random();
+        g = Math.random();
+        b = Math.random();
+    }
+    return [r, g, b];
+}
+
+function floorArrayItems(array, m) {
+    for (let i = 0; i < array.length; i++) {
+        array[i] = Math.floor(array[i] * (m + 1)) / m;
+    }
+    return array;
+}
+
+function averageColors(c1, c2) {
+    let nc = [];
+    for (let i = 0; i < 3; i++) {
+        nc.push((c1[i] + c2[i]) / 2);
+    }
+    return nc;
+}
+
+function setAppearanceValue(cat, alleles, index, multiply, add){
+    for (let i=0; i<2; i++) {
+        cat.appearanceValues[index] *= alleles[i]**multiply;
+        cat.appearanceValues[index] += alleles[i]*add;
+        cat.appearanceValues[index] = confineRange(cat.appearanceValues[index], 0, 1);
+    }
+}
+
+let chromosomeFuncs = [
+    [
+        {
+            // sex
+            setPhenotype: (cat, alleles) => { if (alleles[0] == "Y" || alleles[1] == "Y") { cat.sex = "male"; } },
+            random: () => { return "X" }
+        }
+    ]
+];
+let numberOfChromosomes = Math.floor(Math.random()*5+6);
+for (let i=0; i<numberOfChromosomes; i++) {
+    let geneFuncs = [];
+    let numberOfGenes = Math.floor(Math.random()*3+2);
+    for (let j=0; j<numberOfGenes; j++) {
+        let values1 = [Math.floor(Math.random()*20), Math.random()*2, Math.random()*2-1];
+        let stepModifier = 2**Math.floor(Math.random()*4+1);
+        geneFuncs.push({
+            setPhenotype: (cat, alleles) => {
+                setAppearanceValue(cat, alleles, ...values1);
+            },
+            random: () => {
+                return Math.floor(Math.random()*stepModifier)/stepModifier;
+            }
+        });
+    }
+    chromosomeFuncs.push(geneFuncs);
+}
+let values = [];
+for (let i=0; i<17; i++) {
+    let valValues = [];
+    for (let j=0; j<6; j++) {
+        valValues.push(Math.floor(Math.random()*20));
+    }
+    values.push(valValues);
+}
+chromosomeFuncs.push([
+    {
+        setPhenotype: (cat, alleles)=>{
+            // main fur color
+            let mc = [];
+            for (let i=0; i<3; i++) {
+                mc.push(cat.appearanceValues[values[0][i]]);
+            }
+            cat.appearance.mc = mc;
+            // mouth color
+            let cc = [];
+            for (let i=0; i<3; i++) {
+                cc.push(cat.appearanceValues[values[1][i]]);
+            }
+            cat.appearance.cc = cc;
+            // number of head fur tufts
+            let tfts1 = Math.floor(cat.appearanceValues[values[2][0]]*6)+5;
+            cat.appearance.tfts1 = tfts1
+            // number of mouth fur tufts
+            let tfts2 = Math.floor(cat.appearanceValues[values[3][0]]*4)+5;
+            cat.appearance.tfts2 = tfts2;
+            // fur tuft length
+            cat.appearance.tfts1l = cat.appearanceValues[values[4][0]]*0.6+1.2;
+            cat.appearance.tfts2l = cat.appearanceValues[values[4][0]]*0.2+0.4;
+            // fur tuft stretch
+            cat.appearance.tfts1s = cat.appearanceValues[values[5][0]]/2+0.75;
+            cat.appearance.tfts2s = cat.appearanceValues[values[5][0]]/2+0.75;
+            // fur tuft sag
+            cat.appearance.tftsSag = cat.appearanceValues[values[6][0]]*0.6-0.2;
+            // ear angle
+            cat.appearance.earAngle = Math.PI / 4 + Math.PI * (cat.appearanceValues[values[7][0]]*3-1) / 16;
+            // ear length
+            cat.appearance.earLength = cat.appearanceValues[values[8][0]]+1.3;
+            // ear width
+            cat.appearance.earWidth = cat.appearanceValues[values[9][0]]/5+0.5;
+            // eye color
+            let ec = [];
+            for (let i=0; i<3; i++) {
+                ec.push(cat.appearanceValues[values[10][i]]*0.3+0.7);
+            }
+            cat.appearance.ec = ec;
+            // stripes
+            c = [];
+            for (let i=0; i<3; i++) {
+                c.push(cat.appearanceValues[values[11][i]]);
+            }
+            if (cat.appearanceValues[values[12][0]] < 0.3) {
+                cat.appearance.stripes = {c: c, type: "N"};
+            } else {
+                cat.appearance.stripes = {c: c, type: "M"};
+            }
+            if (cat.appearanceValues[values[13][0]] < 0.3) {
+                cat.appearance.stripes = false;
+            }
+            // patch pattern
+            let ids = [];
+            let tfts = cat.appearance.tfts1;
+            for (let i = 0; i < tfts; i++) {
+                if (i%Math.floor(cat.appearanceValues[values[14][0]]*4+2) == 0) {
+                    ids.push(i);
+                }
+            }
+            cat.appearance.patches.ids = ids.slice();
+            // patch color
+            c = [];
+            for (let i=0; i<3; i++) {
+                c.push(cat.appearanceValues[values[15][i]]);
+            }
+            cat.appearance.patches.c = c;
+            // patch inner radius
+            cat.appearance.patches.ir = cat.appearanceValues[values[16][0]]*0.7+0.3;
+            // patches or not
+            if (cat.appearanceValues[values[16][1]] < 0.3) {
+                cat.appearance.patches.ids = [];
+            }
+        },
+        random: ()=>{
+            return 1;
+        }
+    }
+]);
+
+class CatAppearance {
+    constructor(mc, lc, ec, ec2, nc, cc, clc, tlknc, tfts1, tfts1l, tfts1s, tfts2, tfts2l, tfts2s, tftsSag, earAngle, earWidth, earLength, stripes, patches, mouthColoring, pawColoring, scars, textColor, textOutlineColor) {
+        this.mc = mc;
+        this.lc = lc;
+        this.ec = ec;
+        this.ec2 = ec2;
+        this.nc = nc;
+        this.cc = cc;
+        this.clc = clc;
+        this.tlknc = tlknc;
+        this.tfts1 = tfts1;
+        this.tfts1l = tfts1l;
+        this.tfts1s = tfts1s;
+        this.tfts2 = tfts2;
+        this.tfts2l = tfts2l;
+        this.tfts2s = tfts2s;
+        this.tftsSag = tftsSag;
+        this.earAngle = earAngle;
+        this.earWidth = earWidth;
+        this.earLength = earLength;
+        this.stripes = stripes;
+        this.patches = patches;
+        this.mouthColoring = mouthColoring;
+        this.pawColoring = pawColoring;
+        this.scars = scars;
+        this.textColor = textColor;
+        this.textOutlineColor = textOutlineColor;
+    }
+    randomize() {
+        this.mc = randomFurColor();
+        this.lc = [0, 0, 0];
+        this.ec = [Math.random(), Math.random(), Math.random()];
+        this.ec2 = randomFurColor();
+        this.nc = randomFurColor();
+        this.cc = randomFurColor();
+        this.clc = [0, 0, 0];
+        this.tlknc = randomFurColor();
+        this.tfts1 = Math.floor(Math.random() * 5 + 5);
+        this.tfts1l = Math.random() * 0.6 + 1.1;
+        this.tfts1s = Math.random() * 0.4 + 0.7;
+        this.tfts2 = Math.floor(Math.random() * 6 + 3);
+        this.tfts2l = Math.random() * 0.3 + 0.45;
+        this.tfts2s = Math.random() * 0.4 + 0.7;
+        this.tftsSag = Math.random() * 0.3 - 0.15;
+        this.earAngle = Math.PI * (Math.random() * 0.16 + 0.17);
+        this.earWidth = Math.PI * (Math.random() * 0.08 + 0.12);
+        this.earLength = Math.random() * 0.6 + 1.4;
+        this.stripes = false;
+        this.patches = { c: [], ids: [], ir: 0.5 };
+        this.mouthColoring = randomFurColor();
+        this.pawColoring = randomFurColor();
+        this.scars = false;
+        this.textColor = randomFurColor();
+        this.textOutlineColor = randomFurColor();
+    }
+}
+
+function randomFurColor() {
+    let r = Math.random();
+    let g = Math.random() * r;
+    let b = Math.random() * g;
+    return [r, g, b];
+}
+
+function colorString(r, g, b, a) {
+    let color = Math.floor(r * 255) * 256 ** 3 + Math.floor(g * 255) * 256 ** 2 + Math.floor(b * 255) * 256 + Math.floor(a * 255);
+    return "#" + color.toString(16).padStart(8, "0");
+}
+
+function v(value) {
+    if (Array.isArray(value)) {
+        //      return new KeyFramedValue(value);
+    } else {
+        return { v: value };
+    }
+}
+
+function drawEye(ctx, catHead, ex, ey, r, id) {
+    let xe = ex + catHead.eyes.x.v * r / 8;
+    let ye = ey + catHead.eyes.y.v * r / 8;
+    let r1 = r * 0.3 * catHead.eyes.w.v;
+    let r2 = r * 0.23 * catHead.eyes.h.v;
+    let px = ex + catHead.pupils.x.v * r / 8;
+    let py = ey + catHead.pupils.y.v * r / 8;
+    let gradient = ctx.createRadialGradient(px, py, 0, px, py, r2);
+    gradient.addColorStop(0, colorString(...catHead.cata.ec, 1));
+    let gec = [];
+    for (let j = 0; j < 3; j++) {
+        gec.push(catHead.cata.ec[j] * (1 - catHead.ec.v) + catHead.cata.ec2[j] * catHead.ec.v);
+    }
+    gradient.addColorStop(1, colorString(...gec, 1));
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.ellipse(xe, ye, r1, r2, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = "#000000FF";
+    ctx.beginPath();
+    ctx.ellipse(px, py, r * 0.12 * catHead.pupils.w.v, r * 0.19 * catHead.pupils.h.v, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = colorString(...catHead.cata.tlknc, catHead.innerPupils.a.v);
+    ctx.beginPath();
+    ctx.ellipse(px, py, r * 0.12 * catHead.pupils.w.v * catHead.innerPupils.m.v, r * 0.19 * catHead.pupils.h.v * catHead.innerPupils.m.v, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = colorString(...catHead.cata.mc, 1);
+    for (let j = 0; j < 2; j++) {
+        ctx.beginPath();
+        let a1 = (Math.PI * catHead.eyelids[j * 2].v) % (Math.PI * 2);
+        let a2 = (Math.PI * catHead.eyelids[j * 2 + 1].v) % (Math.PI * 2);
+        let a3 = a1;
+        let a4 = a2;
+        if (id == 1) {
+            a3 = Math.PI * 3 - a2;
+            a4 = Math.PI * 3 - a1;
+        }
+        ctx.ellipse(xe, ye, r1 + 1, r2 + 1, 0, a3, a4, false);
+        ctx.fill();
+    }
+}
+
+class CatHeadFront {
+    constructor(cata, x, y, r, lr, ud, smile, mouthOpen, eyesX, eyesY, eyesW, eyesH, pupilsX, pupilsY, pupilsW, pupilsH, eyelids, innerPupilsM, innerPupilsA, ec) {
+        this.cata = cata;
+        this.x = v(x);
+        this.y = v(y);
+        this.r = v(r);
+        this.smile = v(smile);
+        this.mouthOpen = v(mouthOpen);
+        this.eyes = { x: v(eyesX), y: v(eyesY), w: v(eyesW), h: v(eyesH) };
+        this.pupils = { x: v(pupilsX), y: v(pupilsY), w: v(pupilsW), h: v(pupilsH) };
+        this.eyelids = [];
+        eyelids.forEach((item) => {
+            this.eyelids.push(v(item));
+        });
+        this.innerPupils = { m: v(innerPupilsM), a: v(innerPupilsA) };
+        this.ec = v(ec);
+        this.headAngle = { lr: v(lr), ud: v(ud) };
+    }
+    drawSelf(ctx, cw) {
+        let x = this.x.v * cw;
+        let y = this.y.v * cw;
+        let r = this.r.v * cw;
+        let nx = x + this.headAngle.lr.v * r / 2;
+        let ny = y + this.headAngle.ud.v * r / 2;
+        ctx.fillStyle = colorString(...this.cata.mc, 1);
+        ctx.strokeStyle = colorString(...this.cata.lc, 1);
+        ctx.lineWidth = r / 10;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, 2 * Math.PI);
+        ctx.fill();
+        if (this.cata.stripes != false) {
+            ctx.strokeStyle = colorString(...this.cata.stripes.c, 1);
+            ctx.beginPath();
+            ctx.moveTo(nx - r * 0.35, ny - r * 0.4);
+            ctx.lineTo(nx - r * 0.2, ny - r * 0.65);
+            ctx.lineTo(nx - r * 0, ny - r * 0.4);
+            ctx.lineTo(nx - r * -0.2, ny - r * 0.65);
+            if (this.cata.stripes.type != "N") {
+                ctx.lineTo(nx - r * -0.35, ny - r * 0.4);
+            }
+            ctx.stroke();
+            ctx.strokeStyle = colorString(...this.cata.lc, 1);
+        }
+        for (let i = 0; i < this.cata.tfts1; i++) {
+            let isPatch = false;
+            if (this.cata.patches != false) {
+                ctx.fillStyle = colorString(...this.cata.mc, 1);
+                this.cata.patches.ids.forEach((id) => {
+                    if (id == i) {
+                        isPatch = true;
+                        ctx.fillStyle = colorString(...this.cata.patches.c, 1);
+                    }
+                });
+            }
+            ctx.beginPath();
+            let a = Math.PI / -2 + Math.PI * 2 * i / this.cata.tfts1;
+            let px1 = x + Math.cos(a) * r;
+            let py1 = y + Math.sin(a) * r;
+            ctx.moveTo(px1, py1);
+            let a2 = Math.PI / -2 + Math.PI * 2 * (i + 0.5) / this.cata.tfts1;
+            let as = Math.sign(a2 - Math.PI / 2);
+            let px = x + Math.cos(a2) * r * this.cata.tfts1l - this.headAngle.lr.v * r / 8;
+            let py = y + Math.sin(a2) * r * this.cata.tfts1l * this.cata.tfts1s - this.headAngle.ud.v * r / 8 - this.cata.tftsSag * r;
+            ctx.lineTo(px, py);
+            a = Math.PI / -2 + Math.PI * 2 * (i + 1) / this.cata.tfts1;
+            let px2 = x + Math.cos(a) * r;
+            let py2 = y + Math.sin(a) * r;
+            ctx.lineTo(px2, py2);
+            if (isPatch) {
+                ctx.lineTo(nx + Math.cos(a2) * this.cata.patches.ir * r, ny + Math.sin(a2) * this.cata.patches.ir * r);
+            }
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(px1, py1);
+            ctx.lineTo(px, py);
+            ctx.lineTo(px2, py2);
+            ctx.stroke();
+            if (this.cata.stripes != false) {
+                ctx.strokeStyle = colorString(...this.cata.stripes.c, 1);
+                ctx.beginPath();
+                ctx.moveTo(px + as * r / 8, py);
+                ctx.lineTo(nx + Math.cos(a2) * r * 0.8, (py + ny + Math.sin(a2) * r * 0.8) / 2);
+                ctx.stroke();
+                ctx.strokeStyle = colorString(...this.cata.lc, 1);
+            }
+        }
+        for (let i = 0; i < 2; i++) {
+            ctx.fillStyle = colorString(...this.cata.mc, 1);
+            ctx.lineWidth = r / 10;
+            ctx.beginPath();
+            let ea = Math.PI / -2 + this.cata.earAngle * (i * 2 - 1);
+            let a = ea - this.cata.earWidth;
+            ctx.moveTo(x + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.9);
+            ctx.lineTo(x + Math.cos(ea) * r * this.cata.earLength + this.headAngle.lr.v * r / 4, y + Math.sin(ea) * r * this.cata.earLength + this.headAngle.ud.v * r / 8);
+            a = ea + this.cata.earWidth;
+            ctx.lineTo(x + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.9);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = "#FF88FFFF";
+            ctx.beginPath();
+            a = ea - this.cata.earWidth * 0.58;
+            ctx.moveTo(x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85);
+            ctx.lineTo(x + Math.cos(ea) * r * this.cata.earLength * 0.82 + this.headAngle.lr.v * r / 4, y + Math.sin(ea) * r * this.cata.earLength * 0.82 + this.headAngle.ud.v * r / 8);
+            a = ea + this.cata.earWidth * 0.58;
+            ctx.lineTo(x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85);
+            ctx.fill();
+        }
+        if (this.cata.mouthColoring) {
+            ctx.fillStyle = colorString(...this.cata.cc, 1);
+            ctx.strokeStyle = colorString(...this.cata.clc, 1);
+        } else {
+            ctx.fillStyle = colorString(...this.cata.mc, 1);
+            ctx.strokeStyle = colorString(...this.cata.lc, 1);
+        }
+        ctx.beginPath();
+        ctx.arc(nx, ny + r * 0.47, r * 0.4, 0, 2 * Math.PI);
+        ctx.fill();
+        for (let i = 0; i < this.cata.tfts2; i++) {
+            if (this.cata.mouthColoring) {
+                ctx.fillStyle = colorString(...this.cata.cc, 1);
+                ctx.strokeStyle = colorString(...this.cata.clc, 1);
+            } else {
+                ctx.fillStyle = colorString(...this.cata.mc, 1);
+                ctx.strokeStyle = colorString(...this.cata.lc, 1);
+            }
+            let isPatch = false;
+            if (this.cata.patches != false) {
+                this.cata.patches.ids.forEach((id) => {
+                    if (id == i + this.cata.tfts1) {
+                        isPatch = true;
+                        ctx.fillStyle = colorString(...this.cata.patches.c, 1);
+                    }
+                });
+            }
+            ctx.lineWidth = r / 15;
+            ctx.beginPath();
+            let a = Math.PI / -4 + Math.PI * 1.5 * i / this.cata.tfts2;
+            let px1 = nx + Math.cos(a) * r * 0.4;
+            let py1 = ny + r * 0.47 + Math.sin(a) * r * 0.4;
+            ctx.moveTo(px1, py1);
+            let a2 = Math.PI / -4 + Math.PI * 1.5 * (i + 0.5) / this.cata.tfts2;
+            let px = nx + Math.cos(a2) * r * this.cata.tfts2l - this.headAngle.lr.v * r / 8;
+            let py = ny + r * 0.47 + Math.sin(a2) * r * this.cata.tfts2l * this.cata.tfts2s - this.headAngle.ud.v * r / 8 - this.cata.tftsSag * r / 2;
+            ctx.lineTo(px, py);
+            a = Math.PI / -4 + Math.PI * 1.5 * (i + 1) / this.cata.tfts2;
+            let px2 = nx + Math.cos(a) * r * 0.4;
+            let py2 = ny + r * 0.47 + Math.sin(a) * r * 0.4;
+            ctx.lineTo(px2, py2);
+            if (isPatch) {
+                ctx.lineTo(nx, ny + r * 0.47);
+            }
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(px1, py1);
+            ctx.lineTo(px, py);
+            ctx.lineTo(px2, py2);
+            ctx.stroke();
+        }
+        ctx.fillStyle = colorString(...this.cata.lc, 1);
+        ctx.beginPath();
+        ctx.moveTo(nx - r * 0.2, ny + r * 0.17);
+        ctx.lineTo(nx + r * 0.2, ny + r * 0.17);
+        ctx.lineTo(nx, ny + r * 0.47);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(nx, ny + r * 0.665 - (this.smile.v + this.mouthOpen.v / 2) * r / 8, r / 4, Math.abs(this.smile.v) * r / 8, 0, Math.PI * (Math.sign(this.smile.v) + 3) / 2, Math.PI * (Math.sign(this.smile.v) + 5) / 2);
+        ctx.stroke();
+        if (this.mouthOpen.v != 0) {
+            ctx.beginPath();
+            ctx.ellipse(nx, ny + r * 0.665 - (this.smile.v - this.mouthOpen.v) * r / 8, r / 5, Math.abs(this.smile.v) * r / 10, 0, Math.PI * (Math.sign(this.smile.v) + 3) / 2, Math.PI * (Math.sign(this.smile.v) + 5) / 2);
+            ctx.stroke();
+        }
+        ctx.lineWidth = r / 25;
+        ctx.beginPath();
+        ctx.moveTo(nx, ny + r * 0.43);
+        ctx.lineTo(nx, ny + r * 0.55 + r / 8 - this.mouthOpen.v * r / 16);
+        ctx.stroke();
+        for (let i = 0; i < this.cata.scars.length / 5; i++) {
+            ctx.strokeStyle = colorString(this.cata.scars[i * 5 + 5], 0, 0, 1);
+            ctx.lineWidth = this.cata.scars[i * 5] * r / 8;
+            ctx.beginPath();
+            ctx.moveTo(nx + r * this.cata.scars[i * 5 + 1], ny + r * this.cata.scars[i * 5 + 2]);
+            ctx.lineTo(nx + r * this.cata.scars[i * 5 + 3], ny + r * this.cata.scars[i * 5 + 4]);
+            ctx.stroke();
+        }
+        for (let i = 0; i < 2; i++) {
+            drawEye(ctx, this, nx - r * 0.4 + i * r * 0.8, ny - r * 0.1, r, i);
+        }
+    }
+}
+
+function setCatGeneration(cat, generation){
+    cat.generation = generation;
+    if (inGenerationIDCounters[generation] == undefined) {
+        inGenerationIDCounters[generation] = 0;
+    }
+    cat.inGenerationID = inGenerationIDCounters[generation];
+    inGenerationIDCounters[generation] ++;
+    cat.genID = "G"+generation+"C"+cat.inGenerationID;
+}
+
+class Cat {
+    constructor(parents) {
+        this.id = catIdCounter;
+        if (parents != undefined && parents.length > 0) {
+            setCatGeneration(this, parents[0].generation+1);
+        }
+        catIdCounter++;
+        this.appearanceValues = [];
+        for (let i=0; i<20; i++) {
+            this.appearanceValues.push(0.5);
+        }
+        this.chromosomes = [];
+        this.sex = "female";
+        this.parents = [];
+        this.siblings = [];
+        this.familyNames = [];
+        this.appearance = new CatAppearance();
+        this.appearance.randomize();
+        if (parents != undefined) {
+            for (let i = 0; i < chromosomeFuncs.length * 2; i += 2) {
+                parents.forEach((parent) => {
+                    this.chromosomes.push(parent.chromosomes[i + Math.floor(Math.random() * 2)]);
+                });
+            }
+            updatePhenotypes(this);
+            parents[0].kittens.forEach((sibling) => {
+                this.siblings.push(sibling);
+                sibling.siblings.push(this);
+            });
+            if (Math.random() < 0.5) {
+                this.parents = parents.slice();
+            } else {
+                this.parents[0] = parents[1];
+                this.parents[1] = parents[0];
+            }
+            this.parents.forEach((parent) => {
+                this.familyNames.push(parent.familyNames[Math.floor(Math.random() * 2)]);
+                parent.kittens.push(this);
+            });
+        } else {
+            this.familyNames.push(newFamilyName());
+            this.familyNames.push(newFamilyName());
+            for (let i = 0; i < chromosomeFuncs.length; i++) {
+                for (let j = 0; j < 2; j++) {
+                    let chromosome = [];
+                    for (let k = 0; k < chromosomeFuncs[i].length; k++) {
+                        chromosome.push(chromosomeFuncs[i][k].random(this));
+                    }
+                    this.chromosomes.push(chromosome);
+                }
+            }
+            updatePhenotypes(this);
+        }
+        this.individualName = newIndividualName();
+        this.identifierSylable = capitalize(randomLetter()) + randomVowel();
+        this.formalFullName = this.individualName + " " + this.familyNames.join(" ") + " " + this.identifierSylable;
+        this.formalName = this.identifierSylable + decapitalize(this.individualName);
+        this.partner;
+        this.kittens = [];
+        return this;
+    }
+    updateNames() {
+        this.formalFullName = this.individualName + " " + this.familyNames.join(" ") + " " + this.identifierSylable;
+        this.formalName = this.identifierSylable + decapitalize(this.individualName);
+    }
+    createParents() {
+        let parents = [];
+        this.familyNames.forEach((familyName) => {
+            let parent = new Cat();
+            parent.familyNames[Math.floor(Math.random() * 2)] = familyName;
+            parent.updateNames();
+            parent.kittens.push(this);
+            parents.push(parent);
+            setCatGeneration(parent, this.generation-1)
+        });
+        parents[0].chromosomes[0] = "X";
+        parents[0].chromosomes[1] = "X";
+        parents[1].chromosomes[0] = "X";
+        parents[1].chromosomes[1] = "Y";
+        for (let i = 2; i < chromosomeFuncs.length * 2; i += 2) {
+            if (Math.random() < 0.5) {
+                parents[0].chromosomes[i + Math.floor(Math.random() * 2)] = this.chromosomes[i].slice();
+                parents[1].chromosomes[i + Math.floor(Math.random() * 2)] = this.chromosomes[i + 1].slice();
+            } else {
+                parents[0].chromosomes[i + Math.floor(Math.random() * 2)] = this.chromosomes[i + 1].slice();
+                parents[1].chromosomes[i + Math.floor(Math.random() * 2)] = this.chromosomes[i].slice();
+            }
+        }
+        updatePhenotypes(parents[0]);
+        updatePhenotypes(parents[1]);
+        parents[0].partner = parents[1];
+        parents[1].partner = parents[0];
+        this.parents = parents.slice();
+        return parents;
+    }
+}
+
+function updatePhenotypes(cat) {
+    for (let i = 0; i < chromosomeFuncs.length; i++) {
+        for (let j = 0; j < chromosomeFuncs[i].length; j++) {
+            chromosomeFuncs[i][j].setPhenotype(cat, [cat.chromosomes[i * 2][j], cat.chromosomes[i * 2 + 1][j]]);
+        }
+    }
+}
+
+class FamilyTreeChunk {
+    constructor(parent1, parent2, kittens) {
+        this.catPoss = [];
+        this.isChunk = true;
+        prepctx.fillStyle = "gray";
+        prepctx.fillRect(0, 0, prepcan.width, prepcan.height);
+        let x = 70;
+        let stemXs = [];
+        for (let i = 0; i < kittens.length; i++) {
+            let kitten = kittens[i];
+            let stemX = x;
+            if (kitten.isChunk) {
+                for (let i = 0; i < kitten.catPoss.length; i += 3) {
+                    this.catPoss.push(kitten.catPoss[i]);
+                    this.catPoss.push(kitten.catPoss[i + 1] + x);
+                    this.catPoss.push(kitten.catPoss[i + 2] + 160);
+                }
+                prepctx.putImageData(kitten.imgdt, x, 160);
+                x += kitten.imgdt.width;
+                stemX += kitten.stemX;
+            } else {
+                this.catPoss.push(kitten, x, 230);
+                let face = new CatHeadFront(kitten.appearance, x / 1000, 0.23, 0.03, 0, 0, 0.1, 0, 0, 0, 1, 1, 0, 0, 1, 1, [0, 0, 0, 0], 0, 0, 0);
+                face.drawSelf(prepctx, 1000);
+                x += 140;
+                if (i == kittens.length - 1) {
+                    x -= 70;
+                }
+            }
+            stemXs.push(stemX);
+        }
+        this.stemX = (stemXs[0] + stemXs[stemXs.length - 1]) / 2 - 70;
+        if (kittens.length < 2) {
+            this.stemX = 70;
+        }
+        prepctx.strokeStyle = "black";
+        prepctx.lineWidth = 3;
+        prepctx.beginPath();
+        stemXs.forEach((stemX) => {
+            prepctx.moveTo(stemX, 150);
+            prepctx.lineTo(stemX, 185);
+        });
+        if (kittens.length >= 2) {
+            prepctx.moveTo(stemXs[0], 150);
+            prepctx.lineTo(stemXs[stemXs.length - 1], 150);
+            prepctx.moveTo(this.stemX + 70, 70);
+            prepctx.lineTo(this.stemX + 70, 150);
+        }
+        prepctx.stroke();
+        let face = new CatHeadFront(parent1.appearance, this.stemX / 1000, 0.07, 0.03, 0, 0, 0.1, 0, 0, 0, 1, 1, 0, 0, 1, 1, [0, 0, 0, 0], 0, 0, 0);
+        face.drawSelf(prepctx, 1000);
+        this.catPoss.push(parent1, this.stemX, 70);
+        if (parent2 != "none") {
+            prepctx.strokeStyle = "black";
+            prepctx.lineWidth = 4;
+            prepctx.beginPath();
+            prepctx.moveTo(this.stemX + 45, 70);
+            prepctx.lineTo(this.stemX + 95, 70);
+            prepctx.stroke();
+            face = new CatHeadFront(parent2.appearance, (this.stemX + 140) / 1000, 0.07, 0.03, 0, 0, 0.1, 0, 0, 0, 1, 1, 0, 0, 1, 1, [0, 0, 0, 0], 0, 0, 0);
+            face.drawSelf(prepctx, 1000);
+            this.catPoss.push(parent2, this.stemX + 140, 70);
+            if (kittens.length < 2) {
+                this.imgdt = prepctx.getImageData(0, 0, 315, prepcan.height);
+            } else {
+                this.imgdt = prepctx.getImageData(0, 0, x, prepcan.height);
+            }
+        } else {
+            this.imgdt = prepctx.getImageData(0, 0, 175, prepcan.height);
+        }
+    }
+}
+
+let cat = new Cat();
+setCatGeneration(cat, 500);
+fillInfo(cat, 3);
+displayInfo(cat);
+
+function displayInfo() {
+    let kittenChunks = [];
+    cat.kittens.forEach((kitten) => {
+        kittenChunks.push(new FamilyTreeChunk(kitten, kitten.partner, kitten.kittens));
+    });
+    let catChunk = new FamilyTreeChunk(cat, cat.partner, kittenChunks);
+    let siblingChunks = [];
+    cat.siblings.forEach((sibling) => {
+        siblingChunks.push(new FamilyTreeChunk(sibling, sibling.partner, sibling.kittens));
+    });
+    siblingChunks.splice(Math.floor(siblingChunks.length / 2), 0, catChunk);
+    let parentsChunk = new FamilyTreeChunk(...cat.parents, siblingChunks);
+    let parent0SiblingChunks = [];
+    cat.parents[0].siblings.forEach((sibling) => {
+        parent0SiblingChunks.push(new FamilyTreeChunk(sibling, sibling.partner, sibling.kittens));
+    });
+    parent0SiblingChunks.splice(Math.floor(parent0SiblingChunks.length / 2), 0, parentsChunk);
+    let grandparents0Chunk = new FamilyTreeChunk(...cat.parents[0].parents, parent0SiblingChunks);
+    let imgdt = grandparents0Chunk.imgdt;
+    if (imgdt.width > 4000) {
+        mcan.width = imgdt.width;
+        mcan.style.width = mcan.width + "px";
+    } else {
+        mcan.width = 4000;
+        mcan.style.width = "4000px";
+    }
+    mctx.fillStyle = "gray";
+    mctx.fillRect(0, 0, mcan.width, mcan.height);
+    mctx.putImageData(imgdt, 0, 100);
+    let centerPos = { x: 0, y: 0 };
+    catPoss = [];
+    for (let i = 0; i < grandparents0Chunk.catPoss.length; i += 3) {
+        catPoss.push(grandparents0Chunk.catPoss[i]);
+        catPoss.push(grandparents0Chunk.catPoss[i + 1]);
+        catPoss.push(grandparents0Chunk.catPoss[i + 2] + 100);
+        if (grandparents0Chunk.catPoss[i].id == cat.id) {
+            centerPos.x = grandparents0Chunk.catPoss[i + 1];
+            centerPos.y = grandparents0Chunk.catPoss[i + 2] + 100;
+        }
+    }
+    // https://developer.mozilla.org/en-US/docs/Web/API/Window/scrollTo
+    window.scrollTo({
+        top: centerPos.y - window.innerHeight / 2 + 50,
+        left: centerPos.x - window.innerWidth / 2,
+        behavior: "instant",
+    });
+}
+
+function fillInfo(cat, counter) {
+    if (counter > 0) {
+        if (cat.parents.length == 0) {
+            cat.createParents();
+            cat.parents.forEach((parent) => {
+                fillInfo(parent, counter - 1);
+            });
+            for (let i = 0; i < Math.random() * 3; i++) {
+                new Cat(cat.parents);
+            }
+            let kittens = cat.parents[0].kittens;
+            kittens.forEach((kitten) => {
+                if (kitten.id != cat.id) {
+                    fillInfo(kitten, counter - 1);
+                }
+                let siblings = kittens.slice();
+                for (let i = 0; i < siblings.length; i++) {
+                    if (siblings[i].id == kitten.id) {
+                        siblings.splice(i, 1);
+                    }
+                }
+                kitten.siblings = siblings.slice();
+            });
+        }
+        if (cat.partner == undefined) {
+            if (Math.random() < 0.1) {
+                cat.partner = "none";
+            } else {
+                cat.partner = new Cat();
+                setCatGeneration(cat.partner, cat.generation);
+                if (cat.sex == "female") {
+                    cat.partner.chromosomes[0][0] = "Y";
+                    cat.partner.sex = "male";
+                }
+                cat.partner.partner = cat;
+                fillInfo(cat.partner, counter - 1);
+                if (Math.random() < 0.8) {
+                    for (let i = 0; i < Math.random() * 3 + 1; i++) {
+                        let kitten = new Cat([cat, cat.partner]);
+                        fillInfo(kitten, counter - 1);
+                        //console.log(counter);
+                    }
+                }
+            }
+        }
+        fillInfo(cat.parents[0], counter - 1);
+        fillInfo(cat.parents[1], counter - 1);
+        if (cat.partner != "none") {
+            fillInfo(cat.partner, counter - 1);
+        }
+        cat.siblings.forEach((sibling) => {
+            fillInfo(sibling, counter - 1);
+        });
+        cat.kittens.forEach((kitten) => {
+            fillInfo(kitten, counter - 1);
+        });
+    }
+}
+
+mcan.addEventListener("click", (event) => {
+    for (let i = 0; i < catPoss.length; i += 3) {
+        if ((event.offsetX - catPoss[i + 1]) ** 2 + (event.offsetY - catPoss[i + 2]) ** 2 <= 1024) {
+            cat = catPoss[i];
+            fillInfo(cat, 3);
+            displayInfo();
+        }
+    }
+});
+
+function newIndividualName() {
+    if (Math.random() < 0.5) {
+        let firstLetters = ["H'l", "H'l", "H", "L", "Sh"];
+        let firstLetter = firstLetters[Math.floor(Math.random() * 5)];
+        let ending = "eyn";
+        if (Math.random() < 0.2) {
+            ending = "éyne";
+        }
+        if (firstLetter == "H'l") {
+            if (Math.random() < 0.65) {
+                ending = ending.replace("n", "m");
+            }
+        } else if (Math.random() < 0.4) {
+            ending = ending.replace("n", "m");
+        }
+        return firstLetter + ending;
+    } else if (Math.random() < 0.65) {
+        let firstLetters = ["H", "H", "H", "L", "K", "C", "Kw", "Sh"];
+        let firstLetter = firstLetters[Math.floor(Math.random() * 8)];
+        if (Math.random() < 0.09) {
+            firstLetter = "H'l";
+        } else if (Math.random() < 0.05) {
+            firstLetter = "R";
+        }
+        return firstLetter + "ete";
+    } else if (Math.random() < 1 / 4) {
+        if (Math.random() < 0.5) {
+            return "H'lam";
+        } else {
+            return "H'lan";
+        }
+    } else if (Math.random() < 0.5) {
+        let names = ["Shey", "Hey", "Kem", "Ken", "Shen", "Shem", "Sher"];
+        return names[Math.floor(Math.random() * 7)];
+    } else if (Math.random() < 0.2) {
+        return "Lint";
+    } else {
+        let name = "";
+        for (let i = 0; i < Math.random() * 3; i++) {
+            name += randomLetter() + randomVowel();
+        }
+        if (Math.random() < 0.1) {
+            name += randomLetter();
+        }
+        return capitalize(name);
+    }
+}
+
+function newFamilyName() {
+    if (Math.random() < 0.09) {
+        let names = ["Curow", "Kurow", "Kwurow"];
+        return names[Math.floor(Math.random() * 3)];
+    } else if (Math.random() < 0.07) {
+        let names = ["Mukem", "Muren", "Zetteyl", "Aleyr"];
+        return names[Math.floor(Math.random() * 4)];
+    } else if (Math.random() < 1 / 2) {
+        let endings = ["em", "ow"];
+        let ending = endings[Math.floor(Math.random() * 2)];
+        return capitalize(randomLetter()) + "u" + randomLetter() + ending;
+    } else if (Math.random() < 2 / 3) {
+        return capitalize(randomLetter()) + randomVowel() + randomLetter() + randomVowel() + randomLetter();
+    } else {
+        let name = "";
+        for (let i = 0; i < Math.random() * 4; i++) {
+            name += randomLetter() + randomVowel();
+        }
+        if (Math.random() < 0.3) {
+            name += randomLetter();
+        }
+        return capitalize(name);
+    }
+}
+
+function randomLetter() {
+    if (Math.random() < 0.95) {
+        let letters = ["h", "l", "c", "cr", "k", "kw", "n", "m", "sh", "r"];
+        return letters[Math.floor(Math.random() * 10)];
+    } else if (Math.random() < 0.99) {
+        let letters = ["z", "w", "tt"];
+        return letters[Math.floor(Math.random() * 3)];
+    } else {
+        return "g";
+    }
+}
+
+function randomVowel() {
+    if (Math.random() > 0.8) {
+        let vowels = ["u", "a", "e", "ey"];
+        return vowels[Math.floor(Math.random() * 4)];
+    } else {
+        let vowels = ["ow", "o", "y", "i"];
+        return vowels[Math.floor(Math.random() * 4)];
+    }
+}
+
+function capitalize(word) {
+    return word[0].toUpperCase() + word.substring(1, word.length);
+}
+
+function decapitalize(word) {
+    return word[0].toLowerCase() + word.substring(1, word.length);
+}
+
+function confineRange(value, min, max) {
+    if (value > max) {
+        return max;
+    } else if (value < min) {
+        return min;
+    } else {
+        return value;
+    }
+}
