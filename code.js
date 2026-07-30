@@ -9,10 +9,194 @@ prepcan.width = mcan.width;
 prepcan.height = mcan.height;
 let prepctx = prepcan.getContext("2d");
 
+let saveCatsButton = document.getElementById("savecatsbutton");
+let loadCatsButton = document.getElementById("loadcatsbutton");
+let loadCatsInput = document.getElementById("loadcatsinput");
+
 let inGenerationIDCounters = [];
 let catIdCounter = 0;
 let catPoss = [];
 const near0 = 0.0000001;
+
+let cats = [];
+let cat;
+
+saveCatsButton.addEventListener("click", ()=>{
+    navigator.clipboard.writeText(saveCats());
+});
+
+loadCatsButton.addEventListener("click", ()=>{
+    loadCats(loadCatsInput.value);
+});
+
+function labelCatFurColorPhenotypes(precision, spacing){
+    for (let i=0; i<cats.length; i++) {
+        let cat = cats[i];
+        let color = 0;
+        for (let j=0; j<3; j++) {
+            color += Math.floor(cat.appearance.mc[j]*precision)*(spacing**(2-j));
+        }
+        cat.phenotype = color;
+    }
+}
+
+function phenotypesMatchParentPair(parents, parentPair){
+    return (parents[0].phenotype == parentPair[0] && parents[1].phenotype == parentPair[1]) || (parents[0].phenotype == parentPair[1] && parents[1].phenotype == parentPair[0]);
+}
+
+function getFurColorPhenotypeByParentPairDists(precision, spacing, freqPrecision){
+    labelCatFurColorPhenotypes(precision, spacing);
+    let parentPairs = [];
+    for (let i=0; i<cats.length; i++) {
+        let cat = cats[i];
+        let parentPairIndex = undefined;
+        if (cat.parents.length == 2) {
+            for (let j=0; j<parentPairs.length; j++) {
+                if (phenotypesMatchParentPair(cat.parents, parentPairs[j].pair)) {
+                    parentPairIndex = j;
+                    break;
+                }
+            }
+            if (parentPairIndex == undefined) {
+                parentPairIndex = parentPairs.length;
+                parentPairs.push({
+                    pair: [cat.parents[0].phenotype, cat.parents[1].phenotype],
+                    kittenColors: []
+                });
+            }
+            let kittenColors = parentPairs[parentPairIndex].kittenColors;
+            let foundColor = false;
+            for (let j=0; j<kittenColors.length; j+=2) {
+                if (kittenColors[j] == cat.phenotype) {
+                    foundColor = true;
+                    kittenColors[j+1] ++;
+                    break; 
+                }
+            }
+            if (!foundColor) {
+                kittenColors.push(cat.phenotype, 1);
+            }
+        }
+    }
+    for (let i=0; i<parentPairs.length; i++) {
+        let kittenColors = parentPairs[i].kittenColors;
+        let kittensCount = 0;
+        for (let j=0; j<kittenColors.length; j+=2) {
+            kittensCount += kittenColors[j+1];
+        }
+        for (let j=0; j<kittenColors.length; j+=2) {
+            kittenColors[j+1] = Math.round(freqPrecision*kittenColors[j+1]/kittensCount)/freqPrecision;
+        }
+    }
+    return parentPairs;
+}
+
+function getFurColorInheritanceDistsOldVersion0(precision, spacing){
+    let colors = [];
+    for (let i=0; i<cats.length; i++) {
+        let cat = cats[i];
+        let color = 0;
+        for (let j=0; j<3; j++) {
+            color += Math.floor(cat.appearance.mc[j]*(precision-1))*(spacing**(2-j));
+        }
+        let colorIndex = undefined;
+        for (let j=0; j<colors.length; j++) {
+            if (colors[j].color == color) {
+                colorIndex = j;
+                colors[j].count++;
+                break;
+            }
+        }
+        if (colorIndex == undefined) {
+            colorIndex = colors.length;
+            colors.push({color: color, count: 1, kittenColors: []});
+        }
+        let kittenColors = colors[colorIndex].kittenColors;
+        for (let j=0; j<cat.kittens.length; j++) {
+            let kitten = cat.kittens[j];
+            let kittenColor = 0;
+            for (let k=0; k<3; k++) {
+                kittenColor += Math.floor(kitten.appearance.mc[k]*(precision-1))*(spacing**(2-k));
+            }
+            let kittenColorIndex = undefined;
+            for (let k=0; k<kittenColors.length; k++) {
+                if (kittenColors[k].color == kittenColor) {
+                    kittenColorIndex = k;
+                    kittenColors[k].count++;
+                    break;
+                }
+            }
+            if (kittenColorIndex == undefined) {
+                kittenColorIndex = kittenColors.length;
+                kittenColors.push({color: kittenColor, count: 1});
+            }
+        }
+    }
+    return colors;
+}
+
+function getFurColorInheritanceRelFreqsDistsOldVersion0(precision, spacing, freqPrecision){
+    let colors = getFurColorInheritanceDists(precision, spacing);
+    for (let i=0; i<colors.length; i++) {
+        let kittenColors = colors[i].kittenColors;
+        let kittensCount = 0;
+        for (let j=0; j<kittenColors.length; j++) {
+            kittensCount += kittenColors[j].count;
+        }
+        for (let j=0; j<kittenColors.length; j++) {
+            kittenColors[j] = {
+                color: kittenColors[j].color,
+                freq: Math.round(freqPrecision*kittenColors[j].count/kittensCount)/freqPrecision
+            };
+        }
+        colors[i] = {
+            color: colors[i].color,
+            freq: Math.round(freqPrecision*colors[i].count/cats.length)/freqPrecision,
+            kittenColors: kittenColors
+        };
+    }
+    return colors;
+}
+
+function saveCats(){
+    for (let i=0; i<cats.length; i++) {
+        let cat = cats[i];
+        for (let j=0; j<cat.parents.length; j++) {
+            cat.parents[j] = cat.parents[j].id;
+        }
+        for (let j=0; j<cat.kittens.length; j++) {
+            cat.kittens[j] = cat.kittens[j].id;
+        }
+        for (let j=0; j<cat.siblings.length; j++) {
+            cat.siblings[j] = cat.siblings[j].id;
+        }
+        if (cat.partner != undefined) {
+            cat.partner = cat.partner.id;
+        }
+    }
+    return JSON.stringify(cats);
+}
+
+function loadCats(string){
+    cats = JSON.parse(string);
+    for (let i=0; i<cats.length; i++) {
+        let cat = cats[i];
+        for (let j=0; j<cat.parents.length; j++) {
+            cat.parents[j] = cats[cat.parents[j]];
+        }
+        for (let j=0; j<cat.kittens.length; j++) {
+            cat.kittens[j] = cats[cat.kittens[j]];
+        }
+        for (let j=0; j<cat.siblings.length; j++) {
+            cat.siblings[j] = cats[cat.siblings[j]];
+        }
+        if (cat.partner != undefined) {
+            cat.partner = cats[cat.partner];
+        }
+    }
+    cat = cats[0];
+    displayInfo();
+}
 
 function newNormalCatColor() {
     let r = Math.random();
@@ -545,6 +729,7 @@ class Cat {
         this.formalName = this.identifierSylable + decapitalize(this.individualName);
         this.partner;
         this.kittens = [];
+        cats.push(this); 
         return this;
     }
     updateNames() {
@@ -664,7 +849,7 @@ class FamilyTreeChunk {
     }
 }
 
-let cat = new Cat();
+cat = new Cat();
 setCatGeneration(cat, 500);
 fillInfo(cat, 3);
 displayInfo(cat);
